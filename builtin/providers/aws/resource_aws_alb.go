@@ -10,6 +10,7 @@ import (
 	"github.com/hashicorp/errwrap"
 	"github.com/hashicorp/terraform/helper/resource"
 	"github.com/hashicorp/terraform/helper/schema"
+	"regexp"
 )
 
 func resourceAwsAlb() *schema.Resource {
@@ -24,6 +25,11 @@ func resourceAwsAlb() *schema.Resource {
 
 		Schema: map[string]*schema.Schema{
 			"arn": {
+				Type:     schema.TypeString,
+				Computed: true,
+			},
+
+			"cloudwatch_ref": {
 				Type:     schema.TypeString,
 				Computed: true,
 			},
@@ -191,6 +197,7 @@ func resourceAwsAlbRead(d *schema.ResourceData, meta interface{}) error {
 	alb := describeResp.LoadBalancers[0]
 
 	d.Set("arn", alb.LoadBalancerArn)
+	d.Set("cloudwatch_ref", cloudwatchALBSuffixFromARN(alb.LoadBalancerArn))
 	d.Set("name", alb.LoadBalancerName)
 	d.Set("internal", (alb.Scheme != nil && *alb.Scheme == "internal"))
 	d.Set("security_groups", flattenStringList(alb.SecurityGroups))
@@ -344,4 +351,18 @@ func flattenSubnetsFromAvailabilityZones(availabilityZones []*elbv2.Availability
 		result = append(result, *az.SubnetId)
 	}
 	return result
+}
+
+func cloudwatchALBSuffixFromARN(arn *string) string {
+	if arn == nil {
+		return ""
+	}
+
+	if arnComponents := regexp.MustCompile(`arn:.*:loadbalancer/(.*)`).FindAllStringSubmatch(*arn, -1); len(arnComponents) == 1 {
+		if len(arnComponents[0]) == 2 {
+			return arnComponents[0][1]
+		}
+	}
+
+	return ""
 }
